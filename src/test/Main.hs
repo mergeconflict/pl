@@ -1,15 +1,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, StandaloneDeriving #-}
 
-module Language.PL.Test
-  ( tests
+module Main
+  ( main
   ) where
 
 import Control.Applicative
+import Control.Rule
 import Data.HashSet (HashSet, member)
 import Data.Text.Lazy (isPrefixOf)
-import Distribution.TestSuite.QuickCheck
-import Test.QuickCheck
-import Test.QuickCheck.Instances
+
+import Test.Framework (defaultMain, testGroup)
+import Test.Framework.Providers.QuickCheck2 (testProperty)
+import Test.QuickCheck (Arbitrary, arbitrary, choose, label, oneof, property, shrink, (==>))
+import Test.QuickCheck.Instances ()
 
 import Language.PL.DeBruijnIndex
 import Language.PL.Interpreter
@@ -35,10 +38,10 @@ instance Arbitrary Term where
       Abs name body -> Abs <$> shrink name <*> shrink body
       App abs arg   -> App <$> shrink abs <*> shrink arg
 
-tests :: IO [Test]
-tests = return
+main :: IO ()
+main = defaultMain
   [ testGroup "fresh" freshTests
-  , testGroup "interpret1" interpret1Tests
+  , testGroup "interpret1" interpret1tests
   ]
 
 freshTests =
@@ -49,28 +52,22 @@ freshTests =
       unName name `isPrefixOf` (unName $ fresh names name)
   ]
 
-interpret1Tests =
+interpret1tests =
   [ testProperty "call by value" $ \tm ->
       case (tm, interpret1 tm) of
-
-        -- E-AppAbs
-        (App abs@(Abs _ _) arg@(Abs _ _), actual) -> label "E-AppAbs" $
+        (App abs@(Abs _ body) arg@(Abs _ _), actual) -> label "E-AppAbs" $
           case actual of
-            Just tm' -> tm' /= tm
-            Nothing  -> False
+            Success labels _ -> last labels == "E-AppAbs"
+            Failure -> False
 
-        -- E-App2
         (App abs@(Abs _ _) arg, actual) -> label "E-App2" $
-          actual /= Nothing ==> case actual of
-            Just (App abs' arg') -> abs' == abs && arg' /= arg
-            Just _ -> False
+          actual /= Failure ==> case actual of
+            Success labels _ -> last labels == "E-App2"
 
-        -- E-App1
         (App abs arg, actual) -> label "E-App1" $
-          actual /= Nothing ==> case actual of
-            Just (App abs' arg') -> abs' /= abs && arg' == arg
-            Just _ -> False
+          actual /= Failure ==> case actual of
+            Success labels _ -> last labels == "E-App1"
 
         (_, actual) -> property $
-          actual == Nothing
+          actual == Failure
   ]

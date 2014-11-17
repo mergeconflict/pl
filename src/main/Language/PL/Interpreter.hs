@@ -4,6 +4,7 @@ module Language.PL.Interpreter
   ) where
 
 import Control.Applicative
+import Control.Rule
 
 import Language.PL.DeBruijnIndex
 import Language.PL.Term
@@ -50,28 +51,31 @@ beta old new =
       reduced     = shiftFreeVars (-1) substituted
   in reduced
 
+eApp1 :: Rule [String] Term Term
+eApp1 = rule' ["E-App1"] $ \tm -> case tm of
+  App abs arg -> App <$> interpret1 abs <*> pure arg
+  _ -> Failure
+
+eApp2 :: Rule [String] Term Term
+eApp2 = rule' ["E-App2"] $ \tm -> case tm of
+  App abs@(Abs _ _) arg -> App <$> pure abs <*> interpret1 arg
+  _ -> Failure
+
+eAppAbs :: Rule [String] Term Term
+eAppAbs = rule ["E-AppAbs"] $ \tm -> case tm of
+  App abs@(Abs _ body) arg@(Abs _ _) -> pure $ beta arg body
+  _ -> Nothing
+
 -- Single step reduction
-interpret1 :: Term -> Maybe Term
-interpret1 tm =
-  case tm of
-
-    -- E-AppAbs
-    App abs@(Abs _ body) arg@(Abs _ _) ->
-      Just $ beta arg body
-
-    -- E-App2
-    App abs@(Abs _ _) arg ->
-      App <$> pure abs <*> interpret1 arg
-
-    -- E-App1
-    App abs arg ->
-      App <$> interpret1 abs <*> pure arg
-
-    _ -> Nothing
+interpret1 :: Term -> Result [String] Term
+interpret1 tm = runRule (eAppAbs <|> eApp2 <|> eApp1) tm
 
 -- Full reduction
-interpret :: Term -> Term
-interpret tm =
-  case interpret1 tm of
-    Just tm' -> interpret tm'
-    Nothing  -> tm
+interpret :: Term -> Result [String] Term
+interpret =
+  let go tm =
+        case tm' of
+          Failure -> tm
+          _       -> go tm'
+        where tm' = tm >>= interpret1
+  in go . pure
