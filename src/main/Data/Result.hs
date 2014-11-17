@@ -1,15 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
-module Control.Rule
+module Data.Result
   ( Result (..)
-  , Rule
-  , rule
-  , rule'
-  , runRule
   ) where
 
 import Control.Applicative
-import Control.Arrow
 import Control.Monad
 import Data.Monoid
 
@@ -39,20 +32,3 @@ instance (Monoid l) => Applicative (Result l) where
 instance (Monoid l) => Alternative (Result l) where
   empty = mzero
   (<|>) = mplus
-
-newtype Rule l a b = Rule
-  { unRule :: WrappedArrow (Kleisli (Result l)) a b
-  } deriving (Functor, Applicative, Alternative)
-
-rule :: l -> (a -> Maybe b) -> Rule l a b
-rule label f = Rule $ WrapArrow $ Kleisli $ \a -> case f a of
-  Just b  -> Success label b
-  Nothing -> Failure
-
-rule' :: (Monoid l) => l -> (a -> Result l b) -> Rule l a b
-rule' label f = Rule $ WrapArrow $ Kleisli $ \a -> case f a of
-  Success label' b -> Success (label' <> label) b
-  Failure -> Failure
-
-runRule :: Rule l a b -> a -> Result l b
-runRule (Rule (WrapArrow (Kleisli f))) a = f a

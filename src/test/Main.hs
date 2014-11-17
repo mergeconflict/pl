@@ -5,13 +5,13 @@ module Main
   ) where
 
 import Control.Applicative
-import Control.Rule
-import Data.HashSet (HashSet, member)
+import Data.HashSet (member)
+import Data.Result (Result (..))
 import Data.Text.Lazy (isPrefixOf)
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.QuickCheck (Arbitrary, arbitrary, choose, label, oneof, property, shrink, (==>))
+import Test.QuickCheck hiding (Success, Failure)
 import Test.QuickCheck.Instances ()
 
 import Language.PL.DeBruijnIndex
@@ -32,16 +32,10 @@ instance Arbitrary Term where
             app = App <$> go depth (size + 1) <*> go depth (size + 1)
     in go (-1) 0
 
-  shrink tm =
-    case tm of
-      Var (Idx idx) -> Var . Idx <$> [0 .. idx]
-      Abs name body -> Abs <$> shrink name <*> shrink body
-      App abs arg   -> App <$> shrink abs <*> shrink arg
-
 main :: IO ()
 main = defaultMain
   [ testGroup "fresh" freshTests
-  , testGroup "interpret1" interpret1tests
+  , testGroup "interpret1" interpret1Tests
   ]
 
 freshTests =
@@ -52,22 +46,12 @@ freshTests =
       unName name `isPrefixOf` (unName $ fresh names name)
   ]
 
-interpret1tests =
+interpret1Tests =
   [ testProperty "call by value" $ \tm ->
-      case (tm, interpret1 tm) of
-        (App abs@(Abs _ body) arg@(Abs _ _), actual) -> label "E-AppAbs" $
-          case actual of
-            Success labels _ -> last labels == "E-AppAbs"
-            Failure -> False
-
-        (App abs@(Abs _ _) arg, actual) -> label "E-App2" $
-          actual /= Failure ==> case actual of
-            Success labels _ -> last labels == "E-App2"
-
-        (App abs arg, actual) -> label "E-App1" $
-          actual /= Failure ==> case actual of
-            Success labels _ -> last labels == "E-App1"
-
-        (_, actual) -> property $
-          actual == Failure
+      case interpret1 tm of
+        Failure -> property Discard
+        Success (rule:_) _ -> case tm of
+          App (Abs _ _) (Abs _ _) -> rule === EAppAbs
+          App (Abs _ _) _         -> rule === EApp2
+          App _         _         -> rule === EApp1
   ]
