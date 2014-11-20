@@ -21,7 +21,8 @@ library
                        Language.PL.Interpreter,
                        Language.PL.Name,
                        Language.PL.PrettyPrint,
-                       Language.PL.Term
+                       Language.PL.Term,
+                       Language.PL.Type
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8,

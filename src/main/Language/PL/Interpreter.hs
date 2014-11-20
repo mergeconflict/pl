@@ -18,7 +18,7 @@ mapVars f =
   let go binders tm =
         case tm of
           Var idx -> f binders idx
-          Abs name body -> Abs name $ go (binders + 1) body
+          Abs name ty body -> Abs name ty $ go (binders + 1) body
           App abs arg -> App (go binders abs) (go binders arg)
   in go 0
 
@@ -58,10 +58,10 @@ data Rule = EApp1 | EApp2 | EAppAbs
 -- Single step reduction
 interpret1 :: Term -> Result [Rule] Term
 interpret1 tm = case tm of
-  App abs@(Abs _ body) arg@(Abs _ _) ->
+  App abs@(Abs _ _ body) arg@(Abs _ _ _) ->
     Success [EAppAbs] $ beta arg body
 
-  App abs@(Abs _ _) arg ->
+  App abs@(Abs _ _ _) arg ->
     Success [EApp2] App <*> pure abs <*> interpret1 arg
 
   App abs arg ->
